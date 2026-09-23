@@ -15,9 +15,10 @@ const CONFIG_TABLE_NAME = process.env.CONFIG_TABLE_NAME!;
 const APPSYNC_HTTP_ENDPOINT = process.env.APPSYNC_HTTP_ENDPOINT!;
 
 // ========== CONSTANTS ==========
+// Defaults are 2 minutes. The test suite shortens them through the template parameters.
 const TIMEOUTS = {
-  ACCEPTANCE: 120, // 2 minutes
-  COMPLETION: 120, // 2 minutes
+  ACCEPTANCE: Number(process.env.ACCEPTANCE_TIMEOUT_SECONDS || 120),
+  COMPLETION: Number(process.env.COMPLETION_TIMEOUT_SECONDS || 120),
 } as const;
 
 const CANCELLATION_REASONS = {

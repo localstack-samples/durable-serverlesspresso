@@ -1,0 +1,13 @@
+# Project-local lstk config. Use with: lstk --config lstk.toml <command>
+[[containers]]
+type = "aws"
+tag  = "dev"
+port = "4566"
+env  = ["workshop"]
+
+[env.workshop]
+PERSISTENCE = "1"
+DEBUG = "1"
+# The Vite dev server's origin. Without it LocalStack answers the AppSync Events
+# WebSocket handshake from the browser with 403 (GAPS.md).
+EXTRA_CORS_ALLOWED_ORIGINS = "http://localhost:5173"

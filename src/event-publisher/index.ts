@@ -300,8 +300,9 @@ async function publishToAppSyncEvents(
  * Publish a single event to an AppSync Events channel using IAM authentication
  */
 async function publishToChannel(channel: string, eventData: any): Promise<void> {
+  // Pass the region: the library can only read it from *.appsync-api.<region>.amazonaws.com hosts.
   const request = await PublishRequest.signed(
-    APPSYNC_EVENTS_API_URL,
+    { url: APPSYNC_EVENTS_API_URL, region: process.env.AWS_REGION },
     channel,
     eventData
   );

@@ -53,8 +53,9 @@ export async function publishToAppSync(
     const url = `https://${httpEndpoint}/event`;
     console.log(`[AppSync] Creating signed request to: ${url}`);
     
+    // Pass the region: the library can only read it from *.appsync-api.<region>.amazonaws.com hosts.
     const request = await PublishRequest.signed(
-      url,
+      { url, region: process.env.AWS_REGION },
       channel,
       eventData
     );

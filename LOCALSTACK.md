@@ -1,0 +1,66 @@
+# Running durable-serverlesspresso on LocalStack
+
+Tested on 2026-09-23 with `localstack/localstack-pro:dev` (2026.9.0.dev341), lstk 1.0.1, SAM CLI 1.166.2 and Node.js 22.
+
+## Quick start
+
+```bash
+lstk --config lstk.toml start
+scripts/run-all.sh          # fresh deploy with 15 s timeouts, unit + integration + UI tests
+```
+
+Or step by step:
+
+```bash
+scripts/deploy-localstack.sh --fresh [--test-timeouts]
+(cd src/coffee-orders && npx jest)          # Eric's unit tests (LocalDurableTestRunner)
+(cd tests && npm test)                       # 15 integration tests against LocalStack
+scripts/reset-demo.sh && scripts/frontend-env.sh
+(cd tests && npx playwright test)            # attendee orders, barista accepts and completes
+scripts/demo-restart.sh                      # an order survives `lstk restart` (default timeouts)
+```
+
+`DEMO=1 npx playwright test` in `tests/` runs the UI test headed and slowed down.
+
+## What this branch changes
+
+| File | Change | Why |
+|---|---|---|
+| `template.yaml` | Optional `Existing*` parameters for the Events API, behind a condition. On AWS the stack still creates it | LocalStack CFN can't deploy `AWS::AppSync::Api` yet |
+| `template.yaml`, `src/coffee-orders/index.ts` | `AcceptanceTimeoutSeconds` and `CompletionTimeoutSeconds`, default 120 | Tests run the timeout paths in 15 s |
+| `src/coffee-orders/utils.ts`, `src/event-publisher/index.ts` | Pass `region` to `PublishRequest.signed` | The library reads the region from `*.appsync-api.<region>.amazonaws.com` and throws on any other host. It is correct on AWS too |
+| `src/coffee-orders/package.json` | Pin `@aws/durable-execution-sdk-js-testing` to 1.1.1 | `^1.1.0` resolves to 1.1.4, which needs SDK 2.x, so the unit tests no longer loaded |
+| `lstk.toml` | `:dev` image, persistence, `EXTRA_CORS_ALLOWED_ORIGINS=http://localhost:5173` | See gap 5 below |
+| `scripts/`, `tests/` | Deploy, reset, demo scripts. Jest and Playwright suites | |
+
+## LocalStack gaps
+
+Already tracked from the workshop rebuild:
+
+| Ticket | Gap | Here |
+|---|---|---|
+| AWS-1881 | CFN does not support `AWS::AppSync::Api` or `ChannelNamespace` | Blocks the deploy. Worked around with parameters |
+| AWS-1429 | `AWS::Lambda::Alias` update fails, so every `AutoPublishAlias` redeploy fails | `--fresh` redeploys |
+| AWS-1884 | TLS cert has no SAN for `*.appsync-realtime-api.localhost.localstack.cloud` | A normal browser can't open the realtime socket. Playwright ignores cert errors |
+| AWS-1885 | `ListApis` omits `dns` | The deploy script calls `GetApi` |
+| AWS-1882 | Realtime not served on the HTTP host | Does not apply. This frontend builds the realtime host itself |
+
+New in this run:
+
+1. **CFN outputs with `amazonaws.com` are rewritten into a broken host.** Any output string containing `<region>.amazonaws.com` becomes `amazonaws.com:4566`, so `https://abc.execute-api.us-east-1.amazonaws.com/prod` turns into `https://abc.execute-api.amazonaws.com:4566/prod`, which does not resolve. Plain literals are affected too. Only `${AWS::URLSuffix}` gives a working URL. The template's `ApiUrl` output hits this. Repro: a stack with only outputs `!Sub 'https://abc.execute-api.${AWS::Region}.amazonaws.com/prod'` and the same string as a literal.
+2. **API Gateway URLs fall through to S3 after a restart.** With persistence on, after `lstk restart`, `https://<id>.execute-api.localhost.localstack.cloud:4566/prod/config/coffee-shop` returns S3 `NoSuchBucket` (bucket `prod`) until any API Gateway control-plane call loads the service. A web app used right after a restart gets 404s.
+3. **AppSync Events realtime returns 404 after a restart.** Same pattern: the WebSocket at `/event/realtime` returns 404 until any AppSync control-plane call. The HTTP publish endpoint was fine. `scripts/demo-restart.sh` makes one call to each service after the restart.
+4. **AppSync Events subscription IDs are unique across all connections.** A second connection that subscribes with an ID already used on another live connection gets `DuplicatedOperationError`. On AWS the ID only has to be unique within its connection. Clients with random IDs (this frontend, Amplify) are not affected.
+5. **The AppSync Events WebSocket handshake is subject to LocalStack's CORS checks.** From `http://localhost:5173` it returns 403 unless `EXTRA_CORS_ALLOWED_ORIGINS` includes the origin. AWS accepts any origin, and LocalStack's own API Gateway endpoints don't enforce it either, which is why the REST calls worked.
+
+Durable functions themselves had no issues: parallel branches, retries, `waitForCallback` with timeouts, callback success from another Lambda, execution history with `IncludeExecutionData`, `list-durable-executions-by-function` with status filters, stop, and resuming after a restart.
+
+## Issues in the sample itself
+
+These behave the same on AWS. They are worth raising with the author.
+
+1. **Unknown event reports the wrong reason.** `validationResults.getResults()` skips branches that returned `undefined`, so for an unknown event `results[0]` is the order list and the order is cancelled with "Store is currently closed". Reading `validationResults.all[0].result` keeps the positions.
+2. **The daily limit is off by one.** `initialize-order` writes the new order before the check, so it counts itself and the third order is rejected with `maxOrdersPerAttendee: 3`.
+3. **Fast barista actions are lost.** `ORDER_QUEUED` and `ORDER_ACCEPTED` go out before the next callback is registered. An accept or complete that arrives in between finds no callback ID. The callback handler returns 400 to EventBridge, which treats it as delivered, and the action is gone. People are rarely that fast. The UI test waits for the phase in DynamoDB.
+4. **`ApiUrl` hardcodes `amazonaws.com`.** Using `${AWS::URLSuffix}` would work on both AWS and LocalStack.
+5. **The attendee view is event-wide.** It lists the event's 30 latest orders and treats the first pending one as the user's order. Two tabs of one browser profile also share state through localStorage. The UI test uses one browser context per role.
