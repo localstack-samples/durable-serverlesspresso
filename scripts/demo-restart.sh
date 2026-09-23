@@ -33,10 +33,13 @@ echo "Order $ORDER_ID is waiting for the barista. Execution: $(awsl lambda get-d
 
 echo "==> Restarting LocalStack"
 "${LSTK[@]}" restart
-# After a restart, API Gateway and AppSync Events endpoints only answer once their service
-# has loaded (GAPS.md), so make one control-plane call to each.
+# With the default SNAPSHOT_LOAD_STRATEGY (ON_REQUEST), a service restores its state on its first
+# control-plane call, and until then its API Gateway and AppSync Events endpoints answer 404
+# (localstack AWS-1888, AWS-1891). Make one call to each service the app uses.
 awsl apigateway get-rest-apis --query 'length(items)' >/dev/null
 awsl appsync list-apis --query 'length(apis)' >/dev/null
+awsl events list-event-buses --query 'length(EventBuses)' >/dev/null
+awsl lambda list-functions --query 'length(Functions)' >/dev/null
 
 echo "==> Execution after the restart: $(awsl lambda get-durable-execution --durable-execution-arn "$ARN" --query Status --output text)"
 echo "==> Barista completes the order"

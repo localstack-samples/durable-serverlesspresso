@@ -49,7 +49,15 @@ New in this run, filed in the AWS team triage queue:
 
 1. **CFN outputs with `amazonaws.com` are rewritten into a broken host** (AWS-1887). Any output string containing `<region>.amazonaws.com` becomes `amazonaws.com:4566`, so `https://abc.execute-api.us-east-1.amazonaws.com/prod` turns into `https://abc.execute-api.amazonaws.com:4566/prod`, which does not resolve. Plain literals are affected too. Only `${AWS::URLSuffix}` gives a working URL. The template's `ApiUrl` output hits this. Repro: a stack with only outputs `!Sub 'https://abc.execute-api.${AWS::Region}.amazonaws.com/prod'` and the same string as a literal.
 2. **API Gateway URLs fall through to S3 after a restart** (AWS-1888). With persistence on, after `lstk restart`, `https://<id>.execute-api.localhost.localstack.cloud:4566/prod/config/coffee-shop` returns S3 `NoSuchBucket` (bucket `prod`) until any API Gateway control-plane call loads the service. A web app used right after a restart gets 404s.
-3. **AppSync Events realtime returns 404 after a restart** (AWS-1891). Same pattern: the WebSocket at `/event/realtime` returns 404 until any AppSync control-plane call. The HTTP publish endpoint was fine. `scripts/demo-restart.sh` makes one call to each service after the restart.
+3. **AppSync Events realtime returns 404 after a restart** (AWS-1891). Same pattern: the WebSocket at `/event/realtime` returns 404 until any AppSync control-plane call. The HTTP publish endpoint was fine.
+
+   Gaps 2 and 3 come from the default `SNAPSHOT_LOAD_STRATEGY=ON_REQUEST`, which restores a service only on its first control-plane call. `scripts/demo-restart.sh` makes one call to each service the app uses right after the restart.
+
+   `ON_STARTUP` was tested as the alternative and is not used here:
+   - It does fix both endpoints, but only once the restore has finished. `lstk restart` returns, `/_localstack/init` reports `READY` and `/_localstack/health` reports `persistence: initialized` about 20 s before that. Services restore one at a time, and only the `Ready.` log line marks the end.
+   - During that window, services that are not restored yet behave as if empty. API Gateway answers 404, Lambda says "Function not found", and a PutEvents is accepted by an empty EventBridge store.
+   - **That can lose state.** The `SCHEDULED` saver writes the empty store to disk before the restore reaches it, and the restore then loads the empty file. Repro: create a bus and a rule, wait for the save, `lstk restart`, send one PutEvents as soon as the endpoint answers. After `Ready.`, only the `default` bus is left. We lost every bus and rule of both stacks this way.
+
 4. **AppSync Events subscription IDs are unique across all connections** (AWS-1889). A second connection that subscribes with an ID already used on another live connection gets `DuplicatedOperationError`. On AWS the ID only has to be unique within its connection. Clients with random IDs (this frontend, Amplify) are not affected.
 5. **The AppSync Events WebSocket handshake is subject to LocalStack's CORS checks** (AWS-1890). From `http://localhost:5173` it returns 403 unless `EXTRA_CORS_ALLOWED_ORIGINS` includes the origin. AWS accepts any origin, and LocalStack's own API Gateway endpoints don't enforce it either, which is why the REST calls worked.
 
