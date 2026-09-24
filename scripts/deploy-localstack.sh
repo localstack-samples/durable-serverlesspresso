@@ -36,7 +36,7 @@ if [[ "$API_ID" == "None" || -z "$API_ID" ]]; then
     --publish-auth-modes authType=AWS_IAM --subscribe-auth-modes authType=API_KEY >/dev/null
   awsl appsync create-api-key --api-id "$API_ID" --description "API Key for Coffee Ordering Events API" >/dev/null
 fi
-# GetApi, because ListApis on LocalStack omits dns (localstack AWS-1885)
+# ListApis only returns summary fields (on AWS too), so read the endpoints from GetApi
 HTTP_DNS=$(awsl appsync get-api --api-id "$API_ID" --query 'api.dns.HTTP' --output text)
 REALTIME_DNS=$(awsl appsync get-api --api-id "$API_ID" --query 'api.dns.REALTIME' --output text)
 API_KEY=$(awsl appsync list-api-keys --api-id "$API_ID" --query 'apiKeys[0].id' --output text)

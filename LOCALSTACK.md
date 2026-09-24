@@ -46,7 +46,6 @@ Already tracked from the workshop rebuild:
 | AWS-1881 | CFN does not support `AWS::AppSync::Api` or `ChannelNamespace` | Blocks the deploy. Worked around with parameters |
 | AWS-1429 | `AWS::Lambda::Alias` update fails, so every `AutoPublishAlias` redeploy fails | `--fresh` redeploys |
 | AWS-1884 | TLS cert has no SAN for `*.appsync-realtime-api.localhost.localstack.cloud` | A normal browser can't open the realtime socket. Playwright ignores cert errors |
-| AWS-1885 | `ListApis` omits `dns` | The deploy script calls `GetApi` |
 | AWS-1882 | Realtime not served on the HTTP host | Does not apply. This frontend builds the realtime host itself |
 
 New in this run, filed in the AWS team triage queue:
