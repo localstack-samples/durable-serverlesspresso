@@ -11,6 +11,3 @@ PERSISTENCE = "1"
 # but a request that reaches a service before its restore can get that service's empty state saved
 # over the snapshot, which loses it. See LOCALSTACK.md.
 DEBUG = "1"
-# The Vite dev server's origin. Without it LocalStack answers the AppSync Events
-# WebSocket handshake from the browser with 403 (GAPS.md).
-EXTRA_CORS_ALLOWED_ORIGINS = "http://localhost:5173"

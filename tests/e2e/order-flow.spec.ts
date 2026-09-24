@@ -11,6 +11,12 @@ test('attendee orders a coffee and the barista completes it', async ({ browser }
   const attendeeContext = await browser.newContext();
 
   const barista = await baristaContext.newPage();
+  const realtimeFrames: string[] = [];
+  barista.on('websocket', (ws) => {
+    if (ws.url().includes('appsync-realtime-api')) {
+      ws.on('framereceived', (f) => { if (String(f.payload).includes('"data"')) realtimeFrames.push(String(f.payload)); });
+    }
+  });
   await barista.goto('/barista');
   await expect(barista.getByText('Barista Dashboard')).toBeVisible();
 
@@ -51,6 +57,8 @@ test('attendee orders a coffee and the barista completes it', async ({ browser }
   await attendee.bringToFront();
   await expect(attendee.getByText(/ready|completed/i).first()).toBeVisible();
   await waitForOrder(orderId, (o) => o.status === 'COMPLETED', 'COMPLETED in DynamoDB');
+  // The barista screen learned about the order over AppSync Events, not by reloading.
+  expect(realtimeFrames.some((f) => f.includes('ORDER_QUEUED') && f.includes(orderId))).toBe(true);
 
   await baristaContext.close();
   await attendeeContext.close();

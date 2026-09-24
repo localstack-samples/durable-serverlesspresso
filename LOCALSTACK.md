@@ -15,12 +15,15 @@ Or step by step:
 scripts/deploy-localstack.sh --fresh [--test-timeouts]
 (cd src/coffee-orders && npx jest)          # Eric's unit tests (LocalDurableTestRunner)
 (cd tests && npm test)                       # 15 integration tests against LocalStack
-scripts/reset-demo.sh && scripts/frontend-env.sh
-(cd tests && npx playwright test)            # attendee orders, barista accepts and completes
+scripts/reset-demo.sh && scripts/deploy-frontend-s3.sh   # frontend on an S3 website
+FRONTEND_URL=http://durable-serverlesspresso-frontend.s3-website.localhost.localstack.cloud:4566 \
+  npx --prefix tests playwright test         # attendee orders, barista accepts and completes
 scripts/demo-restart.sh                      # an order survives `lstk restart` (default timeouts)
 ```
 
-`DEMO=1 npx playwright test` in `tests/` runs the UI test headed and slowed down.
+`DEMO=1` runs the UI test headed and slowed down. Open the website URL above to use the app yourself.
+
+The frontend can also run on the Vite dev server (`npm run dev` in `frontend/`, and the UI test without `FRONTEND_URL`). LocalStack only accepts the AppSync Events handshake from known origins, so for `http://localhost:5173` add `EXTRA_CORS_ALLOWED_ORIGINS = "http://localhost:5173"` to `lstk.toml` and restart.
 
 ## What this branch changes
 
@@ -30,7 +33,8 @@ scripts/demo-restart.sh                      # an order survives `lstk restart` 
 | `template.yaml`, `src/coffee-orders/index.ts` | `AcceptanceTimeoutSeconds` and `CompletionTimeoutSeconds`, default 120 | Tests run the timeout paths in 15 s |
 | `src/coffee-orders/utils.ts`, `src/event-publisher/index.ts` | Pass `region` to `PublishRequest.signed` | The library reads the region from `*.appsync-api.<region>.amazonaws.com` and throws on any other host. It is correct on AWS too |
 | `src/coffee-orders/package.json` | Pin `@aws/durable-execution-sdk-js-testing` to 1.1.1 | `^1.1.0` resolves to 1.1.4, which needs SDK 2.x, so the unit tests no longer loaded |
-| `lstk.toml` | `:dev` image, persistence, `EXTRA_CORS_ALLOWED_ORIGINS=http://localhost:5173` | See gap 5 below |
+| `lstk.toml` | `:dev` image, persistence | |
+| `scripts/deploy-frontend-s3.sh` | Builds the frontend and hosts it on an S3 website | Browsers can open the realtime socket from that origin with the default CORS settings (gap 5) |
 | `scripts/`, `tests/` | Deploy, reset, demo scripts. Jest and Playwright suites | |
 
 ## LocalStack gaps
@@ -59,7 +63,7 @@ New in this run, filed in the AWS team triage queue:
    - **That can lose state.** The `SCHEDULED` saver writes the empty store to disk before the restore reaches it, and the restore then loads the empty file. Repro: create a bus and a rule, wait for the save, `lstk restart`, send one PutEvents as soon as the endpoint answers. After `Ready.`, only the `default` bus is left. We lost every bus and rule of both stacks this way.
 
 4. **AppSync Events subscription IDs are unique across all connections** (AWS-1889). A second connection that subscribes with an ID already used on another live connection gets `DuplicatedOperationError`. On AWS the ID only has to be unique within its connection. Clients with random IDs (this frontend, Amplify) are not affected.
-5. **The AppSync Events WebSocket handshake is subject to LocalStack's CORS checks** (AWS-1890). From `http://localhost:5173` it returns 403 unless `EXTRA_CORS_ALLOWED_ORIGINS` includes the origin. AWS accepts any origin, and LocalStack's own API Gateway endpoints don't enforce it either, which is why the REST calls worked.
+5. **The AppSync Events WebSocket handshake is subject to LocalStack's CORS checks** (AWS-1890). From `http://localhost:5173` it returns 403 unless `EXTRA_CORS_ALLOWED_ORIGINS` includes the origin. This is intended: LocalStack cannot allow arbitrary local origins, but it does allow origins it serves itself. Hosting the frontend on an S3 website (`scripts/deploy-frontend-s3.sh`) works with the default settings: the handshake from `http://` and `https://<bucket>.s3-website.localhost.localstack.cloud:4566` opens, and the UI test passes with realtime updates. The same test from `localhost:5173` gets no realtime events.
 
 Durable functions themselves had no issues: parallel branches, retries, `waitForCallback` with timeouts, callback success from another Lambda, execution history with `IncludeExecutionData`, `list-durable-executions-by-function` with status filters, stop, and resuming after a restart.
 
@@ -71,4 +75,5 @@ These behave the same on AWS. They are worth raising with the author.
 2. **The daily limit is off by one.** `initialize-order` writes the new order before the check, so it counts itself and the third order is rejected with `maxOrdersPerAttendee: 3`.
 3. **Fast barista actions are lost.** `ORDER_QUEUED` and `ORDER_ACCEPTED` go out before the next callback is registered. An accept or complete that arrives in between finds no callback ID. The callback handler returns 400 to EventBridge, which treats it as delivered, and the action is gone. People are rarely that fast. The UI test waits for the phase in DynamoDB.
 4. **`ApiUrl` hardcodes `amazonaws.com`.** Using `${AWS::URLSuffix}` would work on both AWS and LocalStack.
-5. **The attendee view is event-wide.** It lists the event's 30 latest orders and treats the first pending one as the user's order. Two tabs of one browser profile also share state through localStorage. The UI test uses one browser context per role.
+5. **`npm run build` fails.** `vue-tsc` reports `BaristaView.vue(396,30): error TS2365` before Vite runs. `scripts/deploy-frontend-s3.sh` calls `vite build` directly.
+6. **The attendee view is event-wide.** It lists the event's 30 latest orders and treats the first pending one as the user's order. Two tabs of one browser profile also share state through localStorage. The UI test uses one browser context per role.
