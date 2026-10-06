@@ -6,7 +6,7 @@
 # Needs the default 120 s barista timeouts (deploy without --test-timeouts).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STACK=durable-serverlesspresso
+STACK=${STACK:-durable-serverlesspresso}
 LSTK=(lstk --config "$ROOT/lstk.toml" --non-interactive)
 awsl() { "${LSTK[@]}" aws "$@"; }
 out() { awsl cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }

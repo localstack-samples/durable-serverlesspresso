@@ -25,6 +25,21 @@ scripts/demo-restart.sh                      # an order survives `lstk restart` 
 
 The frontend can also run on the Vite dev server (`npm run dev` in `frontend/`, and the UI test without `FRONTEND_URL`). LocalStack only accepts the AppSync Events handshake from known origins, so for `http://localhost:5173` add `EXTRA_CORS_ALLOWED_ORIGINS = "http://localhost:5173"` to `lstk.toml` and restart.
 
+## Retest on 2026.10.0.dev39 (2026-10-06)
+
+The unmodified template now deploys natively (stack `durable-native`, no `Existing*` parameters), and every path passes on it: 5 unit tests, 15 integration tests, the UI test against the S3 website, and the restart demo followed by the UI test.
+
+| Ticket | Status on this image |
+|---|---|
+| AWS-1881 AppSync Events in CloudFormation | Fixed. `Api`, `ApiKey` and `ChannelNamespace` deploy, outputs and namespace auth modes are correct. The `Existing*` workaround is no longer needed |
+| AWS-1429 `AWS::Lambda::Alias` update | Fixed. A code change updates the alias in place (`Replacement: False`). `--fresh` is no longer needed |
+| AWS-1883 `GetFunctionConfiguration` by alias | Fixed |
+| AWS-1887 output URL rewrite | Fixed. The hardcoded `ApiUrl` output now resolves |
+| AWS-1889 subscription IDs across connections | Fixed |
+| AWS-1884 certificate SANs | Still open. Strict TLS to `*.appsync-api` and `*.appsync-realtime-api` fails with `ERR_TLS_CERT_ALTNAME_INVALID` |
+
+The scripts take `STACK=<name>` to target another stack, for example `STACK=durable-native scripts/demo-restart.sh`.
+
 ## What this branch changes
 
 | File | Change | Why |
@@ -75,4 +90,5 @@ These behave the same on AWS. They are worth raising with the author.
 3. **Fast barista actions are lost.** `ORDER_QUEUED` and `ORDER_ACCEPTED` go out before the next callback is registered. An accept or complete that arrives in between finds no callback ID. The callback handler returns 400 to EventBridge, which treats it as delivered, and the action is gone. People are rarely that fast. The UI test waits for the phase in DynamoDB.
 4. **`ApiUrl` hardcodes `amazonaws.com`.** Using `${AWS::URLSuffix}` would work on both AWS and LocalStack.
 5. **`npm run build` fails.** `vue-tsc` reports `BaristaView.vue(396,30): error TS2365` before Vite runs. `scripts/deploy-frontend-s3.sh` calls `vite build` directly.
-6. **The attendee view is event-wide.** It lists the event's 30 latest orders and treats the first pending one as the user's order. Two tabs of one browser profile also share state through localStorage. The UI test uses one browser context per role.
+6. **`GET /orders/count` always returns 0.** The template matches `createdAt` (ISO) against `$context.requestTime.substring(0,10)`, but `requestTime` is `dd/MMM/yyyy:HH:mm:ss +0000`. An older LocalStack image returned 1 here, which hid the bug.
+7. **The attendee view is event-wide.** It lists the event's 30 latest orders and treats the first pending one as the user's order. Two tabs of one browser profile also share state through localStorage. The UI test uses one browser context per role.

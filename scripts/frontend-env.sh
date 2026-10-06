@@ -2,7 +2,7 @@
 # Writes frontend/.env with the LocalStack endpoints of the deployed stack.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STACK=durable-serverlesspresso
+STACK=${STACK:-durable-serverlesspresso}
 awsl() { lstk --config "$ROOT/lstk.toml" --non-interactive aws "$@"; }
 out() { awsl cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
 # The ApiUrl output hardcodes amazonaws.com, which LocalStack rewrites into a host that
