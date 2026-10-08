@@ -134,6 +134,10 @@ The history lists every step that finished, the two parallel validation branches
 
 With the default two minute timeouts, the two timeout tests skip themselves. `make test-all` deploys with `TIMEOUTS=15` so they run. To deploy with short timeouts yourself, run `make deploy TIMEOUTS=15`.
 
+### Continuous integration
+
+[`.github/workflows/integration-test.yml`](.github/workflows/integration-test.yml) runs on every push and pull request, and weekly. It runs the unit tests, starts LocalStack with `lstk`, deploys with `make deploy TIMEOUTS=15` and runs `make test`. It needs a `LOCALSTACK_AUTH_TOKEN` secret.
+
 ## Use Cases
 
 ### Resource Browser

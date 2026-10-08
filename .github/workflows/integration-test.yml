@@ -1,0 +1,95 @@
+name: Run Integration Tests
+
+on:
+  push:
+    branches:
+      - localstack-tests
+  pull_request:
+    branches:
+      - localstack-tests
+  schedule:
+    # "At 00:00 on Sunday."
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+jobs:
+  integration-test-job:
+    name: Build, deploy and run integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Install lstk and esbuild
+        run: |
+          npm install -g @localstack/lstk esbuild
+          sam --version
+          aws --version
+
+      - name: Install test dependencies
+        run: |
+          (cd src/coffee-orders && npm install)
+          (cd tests && npm install)
+
+      - name: Run unit tests
+        run: make test-unit
+
+      - name: Start LocalStack
+        run: |
+          # .lstk/config.toml sets the image and the emulator settings
+          lstk --non-interactive start --timeout 180s
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+
+      - name: Configure AWS profile for lstk
+        run: |
+          # Without a profile, `lstk aws` prints a note to stdout, which breaks the
+          # $(lstk aws ...) lookups in the Makefile and the scripts.
+          lstk setup aws --non-interactive --force
+
+      - name: Build and deploy
+        run: |
+          # 15 second barista timeouts, so the timeout tests run instead of skipping
+          make deploy TIMEOUTS=15
+
+      - name: Run integration tests
+        run: make test
+
+      - name: Show LocalStack logs
+        if: always()
+        run: lstk logs
+
+      - name: Send a Slack notification
+        if: failure() || github.event_name != 'pull_request'
+        uses: ravsamhq/notify-slack-action@v2
+        with:
+          status: ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: "{workflow} has {status_message}"
+          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}>"
+          footer: "Linked Repo <{repo_url}|{repo}> | <{run_url}|View Workflow run>"
+          notify_when: "failure"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Generate a Diagnostic Report
+        if: failure()
+        run: |
+          curl -s localhost:4566/_localstack/diagnose | gzip -cf > diagnose.json.gz
+
+      - name: Upload the Diagnostic Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnose.json.gz
+          path: ./diagnose.json.gz
