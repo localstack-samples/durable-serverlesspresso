@@ -1,65 +1,45 @@
-# Running durable-serverlesspresso on LocalStack
+# Notes from running durable-serverlesspresso on LocalStack
 
-Tested on 2026-09-23 with `localstack/localstack-pro:dev` (2026.9.0.dev341), lstk 1.0.1, SAM CLI 1.166.2 and Node.js 22.
+These are the notes from porting the app to LocalStack: what worked, which LocalStack gaps we hit and how they were fixed, and issues in the sample itself. For setup and usage, see the [README](README.md).
 
-## Quick start
-
-```bash
-lstk --config lstk.toml start
-scripts/run-all.sh          # fresh deploy with 15 s timeouts, unit + integration + UI tests
-```
-
-Or step by step:
-
-```bash
-scripts/deploy-localstack.sh --fresh [--test-timeouts]
-(cd src/coffee-orders && npx jest)          # Eric's unit tests (LocalDurableTestRunner)
-(cd tests && npm test)                       # 15 integration tests against LocalStack
-scripts/reset-demo.sh && scripts/deploy-frontend-s3.sh   # frontend on an S3 website
-FRONTEND_URL=http://durable-serverlesspresso-frontend.s3-website.localhost.localstack.cloud:4566 \
-  npx --prefix tests playwright test         # attendee orders, barista accepts and completes
-scripts/demo-restart.sh                      # an order survives `lstk restart` (default timeouts)
-```
-
-`DEMO=1` runs the UI test headed and slowed down. Open the website URL above to use the app yourself.
-
-The frontend can also run on the Vite dev server (`npm run dev` in `frontend/`, and the UI test without `FRONTEND_URL`). LocalStack only accepts the AppSync Events handshake from known origins, so for `http://localhost:5173` add `EXTRA_CORS_ALLOWED_ORIGINS = "http://localhost:5173"` to `lstk.toml` and restart.
+First tested on 2026-09-23 with `localstack/localstack-pro:dev` (2026.9.0.dev341), lstk 1.0.1, SAM CLI 1.166.2 and Node.js 22. Retested on 2026.10.0.dev39 (below), where every gap that blocked the app is fixed.
 
 ## Retest on 2026.10.0.dev39 (2026-10-06)
 
-The unmodified template now deploys natively (stack `durable-native`, no `Existing*` parameters), and every path passes on it: 5 unit tests, 15 integration tests, the UI test against the S3 website, and the restart demo followed by the UI test.
+The template now deploys natively, and every path passes: 5 unit tests, 15 integration tests, the UI test against the S3 website, and the restart demo followed by the UI test.
 
 | Ticket | Status on this image |
 |---|---|
-| AWS-1881 AppSync Events in CloudFormation | Fixed. `Api`, `ApiKey` and `ChannelNamespace` deploy, outputs and namespace auth modes are correct. The `Existing*` workaround is no longer needed |
-| AWS-1429 `AWS::Lambda::Alias` update | Fixed. A code change updates the alias in place (`Replacement: False`). `--fresh` is no longer needed |
+| AWS-1881 AppSync Events in CloudFormation | Fixed. `Api`, `ApiKey` and `ChannelNamespace` deploy, outputs and namespace auth modes are correct. The workaround that created the API outside the template is gone |
+| AWS-1429 `AWS::Lambda::Alias` update | Fixed. A code change updates the alias in place (`Replacement: False`), so redeploys work |
 | AWS-1883 `GetFunctionConfiguration` by alias | Fixed |
 | AWS-1887 output URL rewrite | Fixed. The hardcoded `ApiUrl` output now resolves |
 | AWS-1889 subscription IDs across connections | Fixed |
-| AWS-1884 certificate SANs | Still open. Strict TLS to `*.appsync-api` and `*.appsync-realtime-api` fails with `ERR_TLS_CERT_ALTNAME_INVALID` |
+| AWS-1884 certificate SANs | Still open. Strict TLS to `*.appsync-api` and `*.appsync-realtime-api` fails with `ERR_TLS_CERT_ALTNAME_INVALID`, so a regular browser gets no live updates (reload the page instead) |
 
-The scripts take `STACK=<name>` to target another stack, for example `STACK=durable-native scripts/demo-restart.sh`.
 
-## What this branch changes
+## What this fork changes
 
 | File | Change | Why |
 |---|---|---|
-| `template.yaml` | Optional `Existing*` parameters for the Events API, behind a condition. On AWS the stack still creates it | LocalStack CFN can't deploy `AWS::AppSync::Api` yet |
-| `template.yaml`, `src/coffee-orders/index.ts` | `AcceptanceTimeoutSeconds` and `CompletionTimeoutSeconds`, default 120 | Tests run the timeout paths in 15 s |
+| `template.yaml` | `AcceptanceTimeoutSeconds` and `CompletionTimeoutSeconds` parameters, default 120 | The tests run the timeout paths with 15 s |
+| `src/coffee-orders/index.ts` | Read the timeouts from the environment | Same |
 | `src/coffee-orders/utils.ts`, `src/event-publisher/index.ts` | Pass `region` to `PublishRequest.signed` | The library reads the region from `*.appsync-api.<region>.amazonaws.com` and throws on any other host. It is correct on AWS too |
 | `src/coffee-orders/package.json` | Pin `@aws/durable-execution-sdk-js-testing` to 1.1.1 | `^1.1.0` resolves to 1.1.4, which needs SDK 2.x, so the unit tests no longer loaded |
-| `lstk.toml` | `:dev` image, persistence | |
-| `scripts/deploy-frontend-s3.sh` | Builds the frontend and hosts it on an S3 website | Browsers can open the realtime socket from that origin with the default CORS settings (gap 5) |
-| `scripts/`, `tests/` | Deploy, reset, demo scripts. Jest and Playwright suites | |
+| `.lstk/config.toml` | `dev` image, persistence, App Inspector | lstk picks it up from the repository root |
+| `Makefile`, `scripts/` | Deploy, frontend, reset, restart demo | |
+| `tests/` | Jest integration tests and the Playwright UI test | |
 
 ## LocalStack gaps
+
+This is the state at the first run. The retest table above shows which of these are fixed.
 
 Already tracked from the workshop rebuild:
 
 | Ticket | Gap | Here |
 |---|---|---|
 | AWS-1881 | CFN does not support `AWS::AppSync::Api` or `ChannelNamespace` | Blocks the deploy. Worked around with parameters |
-| AWS-1429 | `AWS::Lambda::Alias` update fails, so every `AutoPublishAlias` redeploy fails | `--fresh` redeploys |
+| AWS-1429 | `AWS::Lambda::Alias` update fails, so every `AutoPublishAlias` redeploy fails | Redeployed from scratch at the time |
 | AWS-1884 | TLS cert has no SAN for `*.appsync-realtime-api.localhost.localstack.cloud` | A normal browser can't open the realtime socket. Playwright ignores cert errors |
 | AWS-1882 | Realtime not served on the HTTP host | Does not apply. This frontend builds the realtime host itself |
 
