@@ -168,4 +168,3 @@ make stop
 - [AWS Lambda durable functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)
 - [`lstk`](https://docs.localstack.cloud/aws/getting-started/installation/)
 - [The original app](https://github.com/singledigit/durable-serverlesspresso) and [its walkthrough video](https://youtu.be/XJ80NBOwsow)
-- [LOCALSTACK.md](LOCALSTACK.md): notes from running the app on LocalStack, and issues in the sample that behave the same on AWS
