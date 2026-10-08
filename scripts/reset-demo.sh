@@ -2,8 +2,9 @@
 # Stops running order workflows and deletes all orders, so the attendee and barista views start empty.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 STACK=${STACK:-durable-serverlesspresso}
-awsl() { lstk --config "$ROOT/lstk.toml" --non-interactive aws "$@"; }
+awsl() { lstk --non-interactive aws "$@"; }
 out() { awsl cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
 
 FN=$(out DurableFunctionName)

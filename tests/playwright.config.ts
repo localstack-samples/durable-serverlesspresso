@@ -16,7 +16,7 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     baseURL: frontendUrl ?? 'http://localhost:5173',
     headless: !demo,
-    // LocalStack's certificate has no SAN for *.appsync-realtime-api.localhost.localstack.cloud (GAPS.md).
+    // LocalStack's TLS certificate does not cover the AppSync Events realtime host yet.
     ignoreHTTPSErrors: true,
     launchOptions: { slowMo: demo ? 500 : 0 },
     trace: 'retain-on-failure',
@@ -24,7 +24,7 @@ export default defineConfig({
     video: demo ? 'on' : 'off',
   },
   // The dev server reads frontend/.env, written by scripts/frontend-env.sh. It needs
-  // EXTRA_CORS_ALLOWED_ORIGINS=http://localhost:5173 in lstk.toml for the realtime socket.
+  // EXTRA_CORS_ALLOWED_ORIGINS=http://localhost:5173 in .lstk/config.toml for the realtime socket.
   webServer: frontendUrl ? undefined : {
     command: 'npm --prefix ../frontend run dev -- --port 5173 --strictPort',
     url: 'http://localhost:5173',

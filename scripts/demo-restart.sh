@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Demo: an order survives an emulator restart.
 # 1. place an order and accept it, so the workflow waits for the barista to complete it
-# 2. restart LocalStack (persistence is on in lstk.toml)
+# 2. restart LocalStack (persistence is on in .lstk/config.toml)
 # 3. complete the order and show that the steps before the restart did not run again
 # Needs the default 120 s barista timeouts (deploy without --test-timeouts).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 STACK=${STACK:-durable-serverlesspresso}
-LSTK=(lstk --config "$ROOT/lstk.toml" --non-interactive)
+LSTK=(lstk --non-interactive)
 awsl() { "${LSTK[@]}" aws "$@"; }
 out() { awsl cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
 REST_API_ID=$(awsl cloudformation describe-stack-resource --stack-name "$STACK" \

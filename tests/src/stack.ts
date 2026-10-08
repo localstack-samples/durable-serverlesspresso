@@ -24,8 +24,7 @@ export async function stack(): Promise<Stack> {
   const res = await cfn.send(new DescribeStacksCommand({ StackName: name }));
   const out = Object.fromEntries(res.Stacks![0].Outputs!.map((o) => [o.OutputKey!, o.OutputValue!]));
 
-  // The template's ApiUrl output hardcodes amazonaws.com, which LocalStack rewrites into a
-  // host that does not resolve (GAPS.md). Build the URL from the API ID instead.
+  // The template's ApiUrl output hardcodes amazonaws.com. Build the LocalStack URL from the API ID.
   const api = await cfn.send(new DescribeStackResourceCommand({ StackName: name, LogicalResourceId: 'CoffeeOrderingApi' }));
   const restApiId = api.StackResourceDetail!.PhysicalResourceId!;
   const region = process.env.AWS_REGION!;

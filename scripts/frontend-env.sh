@@ -2,11 +2,11 @@
 # Writes frontend/.env with the LocalStack endpoints of the deployed stack.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 STACK=${STACK:-durable-serverlesspresso}
-awsl() { lstk --config "$ROOT/lstk.toml" --non-interactive aws "$@"; }
+awsl() { lstk --non-interactive aws "$@"; }
 out() { awsl cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
-# The ApiUrl output hardcodes amazonaws.com, which LocalStack rewrites into a host that
-# does not resolve (GAPS.md), so build the URL from the REST API ID.
+# The ApiUrl output hardcodes amazonaws.com, so build the LocalStack URL from the REST API ID.
 REST_API_ID=$(awsl cloudformation describe-stack-resource --stack-name "$STACK" \
   --logical-resource-id CoffeeOrderingApi --query StackResourceDetail.PhysicalResourceId --output text)
 cat > "$ROOT/frontend/.env" <<ENV

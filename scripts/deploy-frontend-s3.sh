@@ -4,8 +4,9 @@
 # EXTRA_CORS_ALLOWED_ORIGINS (localstack AWS-1890).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 BUCKET=durable-serverlesspresso-frontend
-awsl() { lstk --config "$ROOT/lstk.toml" --non-interactive aws "$@"; }
+awsl() { lstk --non-interactive aws "$@"; }
 
 "$ROOT/scripts/frontend-env.sh"
 # `npm run build` runs vue-tsc first, which fails on an existing type error in BaristaView.vue.

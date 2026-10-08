@@ -1,0 +1,13 @@
+# Project-local lstk config. lstk picks it up when you run it from the repository root,
+# so `lstk start` here starts the emulator this sample needs.
+[[containers]]
+type = "aws"
+tag  = "dev"
+port = "4566"
+env  = ["serverlesspresso"]
+
+[env.serverlesspresso]
+# Executions survive `lstk restart` (scripts/demo-restart.sh)
+PERSISTENCE = "1"
+# Traces in the LocalStack web app (App Inspector)
+APP_INSPECTOR = "1"

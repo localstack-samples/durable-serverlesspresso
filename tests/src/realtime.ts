@@ -19,7 +19,7 @@ export class RealtimeSubscriber {
   async connect() {
     const realtimeHost = this.httpHost.replace('.appsync-api.', '.appsync-realtime-api.');
     const header = Buffer.from(JSON.stringify(this.auth)).toString('base64url');
-    // LocalStack's certificate has no SAN for *.appsync-realtime-api.localhost.localstack.cloud (GAPS.md).
+    // LocalStack's TLS certificate does not cover the AppSync Events realtime host yet.
     this.ws = new WebSocket(`wss://${realtimeHost}/event/realtime`, [`header-${header}`, 'aws-appsync-event-ws'], {
       rejectUnauthorized: false,
     });
