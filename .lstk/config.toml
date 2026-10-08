@@ -7,7 +7,7 @@ port = "4566"
 env  = ["serverlesspresso"]
 
 [env.serverlesspresso]
-# Executions survive `lstk restart` (scripts/demo-restart.sh)
-PERSISTENCE = "1"
+# Uncomment to keep state across `lstk restart` (needed for `make restart-demo`)
+# PERSISTENCE = "1"
 # Traces in the LocalStack web app (App Inspector)
 APP_INSPECTOR = "1"

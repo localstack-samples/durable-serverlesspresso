@@ -73,7 +73,7 @@ test-all: ## Deploy with 15 s timeouts and run every test
 reset: ## Delete all orders and open the store
 	scripts/reset-demo.sh
 
-restart-demo: ## Show an order surviving `lstk restart` (needs the default timeouts)
+restart-demo: ## Show an order surviving `lstk restart` (needs persistence on)
 	scripts/demo-restart.sh
 
 destroy: ## Delete the stack

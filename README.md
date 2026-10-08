@@ -65,7 +65,7 @@ Run `make` on its own to list all targets. Every target prints the commands it r
 
 ## Deployment
 
-Start LocalStack from the repository root. `lstk` reads `.lstk/config.toml`, which uses the `dev` image and turns on persistence and App Inspector:
+Start LocalStack from the repository root. `lstk` reads `.lstk/config.toml`, which uses the `dev` image and turns on App Inspector:
 
 ```shell
 make start
@@ -146,7 +146,7 @@ The [Resource Browser](https://app.localstack.cloud/inst/default/resources) in t
 
 ### Persistence
 
-Persistence is on in `.lstk/config.toml`, so a durable execution survives a restart of the emulator. With the default timeouts, run:
+With persistence on, a durable execution survives a restart of the emulator. Persistence is off by default, so each `lstk start` begins with an empty emulator. To try it, uncomment `PERSISTENCE = "1"` in `.lstk/config.toml`, restart LocalStack (`make stop start`), deploy with the default timeouts, and run:
 
 ```shell
 make restart-demo

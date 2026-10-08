@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Demo: an order survives an emulator restart.
 # 1. place an order and accept it, so the workflow waits for the barista to complete it
-# 2. restart LocalStack (persistence is on in .lstk/config.toml)
+# 2. restart LocalStack (needs PERSISTENCE = "1" in .lstk/config.toml)
 # 3. complete the order and show that the steps before the restart did not run again
 # Needs the default 120 s barista timeouts (deploy without --test-timeouts).
 set -euo pipefail
