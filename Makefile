@@ -11,13 +11,13 @@ TIMEOUTS ?=
 export STACK FRONTEND_URL
 export STACK_NAME := $(STACK)
 
-output = $(shell lstk --non-interactive aws cloudformation describe-stacks --stack-name $(STACK) --query "Stacks[0].Outputs[?OutputKey=='$(1)'].OutputValue" --output text)
+output = $(shell lstk --non-interactive aws cloudformation describe-stacks --stack-name $(STACK) --query "Stacks[0].Outputs[?OutputKey=='$(1)'].OutputValue" --output text 2>/dev/null)
 FUNCTION = $(call output,DurableFunctionName)
-LATEST_EXECUTION = $(shell lstk --non-interactive aws lambda list-durable-executions-by-function --function-name $(FUNCTION) --query 'sort_by(DurableExecutions,&StartTimestamp)[-1].DurableExecutionArn' --output text)
+LATEST_EXECUTION = $(shell lstk --non-interactive aws lambda list-durable-executions-by-function --function-name $(FUNCTION) --query 'sort_by(DurableExecutions,&StartTimestamp)[-1].DurableExecutionArn' --output text 2>/dev/null)
 
 .DEFAULT_GOAL := help
 .PHONY: help install start stop status build deploy frontend urls executions history \
-        test-unit test test-ui test-all reset restart-demo destroy
+        test-unit test test-ui test-all reset restart-demo destroy running deployed
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  make %-14s %s\n", $$1, $$2}'
@@ -36,14 +36,21 @@ stop: ## Stop LocalStack
 status: ## Show the emulator and the deployed resources
 	lstk status
 
+# Checks that run before the targets that need them
+running:
+	@lstk --non-interactive status >/dev/null 2>&1 || { echo "LocalStack is not running. Run 'make start' first."; exit 1; }
+
+deployed: running
+	@lstk --non-interactive aws cloudformation describe-stacks --stack-name $(STACK) >/dev/null 2>&1 || { echo "The $(STACK) stack is not deployed. Run 'make deploy' first."; exit 1; }
+
 build: ## Build the Lambda functions with SAM
 	lstk sam build
 
-deploy: build ## Deploy the stack and open the coffee shop
+deploy: running build ## Deploy the stack and open the coffee shop
 	lstk sam deploy --stack-name $(STACK) --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset$(if $(TIMEOUTS), --parameter-overrides AcceptanceTimeoutSeconds=$(TIMEOUTS) CompletionTimeoutSeconds=$(TIMEOUTS))
 	scripts/seed-config.sh
 
-frontend: ## Build the Vue frontend and host it on an S3 website
+frontend: deployed ## Build the Vue frontend and host it on an S3 website
 	scripts/deploy-frontend-s3.sh
 	@$(MAKE) --no-print-directory urls
 
@@ -51,16 +58,16 @@ urls: ## Print the attendee and barista URLs
 	@echo "Attendee: $(FRONTEND_URL)/attendee"
 	@echo "Barista:  $(FRONTEND_URL)/barista"
 
-executions: ## List the durable executions of the order workflow
+executions: deployed ## List the durable executions of the order workflow
 	lstk aws lambda list-durable-executions-by-function --function-name $(FUNCTION) --query 'DurableExecutions[].[DurableExecutionName,Status]' --output table
 
-history: ## Show the event history of the latest durable execution
+history: deployed ## Show the event history of the latest durable execution
 	lstk aws lambda get-durable-execution-history --durable-execution-arn $(LATEST_EXECUTION) --query 'Events[].[EventType,Name]' --output table
 
 test-unit: ## Run the unit tests (durable SDK test runner, no LocalStack needed)
 	cd src/coffee-orders && npx jest
 
-test: ## Run the integration tests against LocalStack
+test: deployed ## Run the integration tests against LocalStack
 	cd tests && npm test
 
 test-ui: reset ## Run the Playwright test against the S3 website
@@ -70,10 +77,10 @@ test-all: ## Deploy with 15 s timeouts and run every test
 	$(MAKE) deploy TIMEOUTS=15
 	$(MAKE) frontend test-unit test test-ui
 
-reset: ## Delete all orders and open the store
+reset: deployed ## Delete all orders and open the store
 	scripts/reset-demo.sh
 
-restart-demo: ## Show an order surviving `lstk restart` (needs persistence on)
+restart-demo: deployed ## Show an order surviving `lstk restart` (needs persistence on)
 	scripts/demo-restart.sh
 
 destroy: ## Delete the stack
