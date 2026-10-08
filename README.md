@@ -154,6 +154,11 @@ make restart-demo
 
 The script places an order, accepts it, restarts LocalStack while the workflow waits for the barista, completes the order and shows that `initialize-order` ran only once.
 
+## Troubleshooting
+
+- **Every order fails and the logs say `Cannot find module 'index'`.** The stack was deployed without a build, so the functions contain the TypeScript sources instead of the esbuild bundle. `sam deploy` uses `.aws-sam/build` only if `sam build` ran first in the same folder. Run `make deploy`, which always builds first.
+- **The barista header says "Loading..." and the store toggle fails with `No event loaded`.** The event configuration is missing. `make deploy` seeds it, or run `scripts/seed-config.sh`.
+
 ## Cleanup
 
 ```shell

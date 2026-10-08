@@ -47,7 +47,7 @@ build: ## Build the Lambda functions with SAM
 	lstk sam build
 
 deploy: running build ## Deploy the stack and open the coffee shop
-	lstk sam deploy --stack-name $(STACK) --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset$(if $(TIMEOUTS), --parameter-overrides AcceptanceTimeoutSeconds=$(TIMEOUTS) CompletionTimeoutSeconds=$(TIMEOUTS))
+	lstk sam deploy --template-file .aws-sam/build/template.yaml --stack-name $(STACK) --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset$(if $(TIMEOUTS), --parameter-overrides AcceptanceTimeoutSeconds=$(TIMEOUTS) CompletionTimeoutSeconds=$(TIMEOUTS))
 	scripts/seed-config.sh
 
 frontend: deployed ## Build the Vue frontend and host it on an S3 website
