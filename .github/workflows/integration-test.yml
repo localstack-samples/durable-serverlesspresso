@@ -52,6 +52,11 @@ jobs:
           lstk --non-interactive start --timeout 180s
         env:
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          # lstk forwards LOCALSTACK_* variables without the prefix. The functions are
+          # arm64 and the runner is x86_64, so run them on the runner's architecture.
+          LOCALSTACK_LAMBDA_IGNORE_ARCHITECTURE: "1"
+          # Fills the diagnostic report uploaded on failure
+          LOCALSTACK_DEBUG: "1"
 
       - name: Configure AWS profile for lstk
         run: |
